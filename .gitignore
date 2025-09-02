@@ -6,18 +6,18 @@
 build/
 /mars/captures
 obj/
-
+.vscode/
 *.swp
 *.pyc
 xcuserdata
 xcshareddata
 
-/mars/comm/verinfo.h
 /mars/libraries/*/
 /mars/*/libs/
 !/mars/boost/libs/
 /samples/iOS/iOSDemo/Kernel/MarsLib/
 /samples/iOS/iOSDemoXlog/Kernel/MarsLib/
+/samples/iOS/XloggerSwiftDemo/Kernel/MarsLib/
 /samples/Mac/Kernel/MarsLib/
 /samples/android/xlogSample/app/src/main/jni/export_include/*.so
 
@@ -55,7 +55,7 @@ xcshareddata
 /mars/log/win32proj/Debug/*.pdb
 /mars/log/win32proj/Debug/log.tlog/*.tlog
 /mars/log/win32proj/Debug/log.tlog/*.lastbuildstate
-/mars/log/win32proj/Debug/log.tlog/*
+/mars/xlog/win32proj/Debug/log.tlog/*
 /samples/win32test/Debug/*.obj
 /samples/win32test/Debug/*.idb
 /samples/win32test/Debug/*.pdb
@@ -88,3 +88,31 @@ xcshareddata
 .autotools
 .cproject
 .project
+*.lib
+*.pdb
+mars/win32proj/Debug/mars.lastbuildstate
+mars/win32proj/Debug/mars.unsuccessfulbuild
+mars/comm/verinfo.h
+
+# cmake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+.vs
+mars/*/Win32/Debug
+mars/Win32/Debug
+*.dir
+*.out
+Debug-iphonesimulator
+*.xcodeproj
+*.build
+cmake_build
+*.settings
+mars/cmake-build-debug
+mars/openssl/include/openssl/*

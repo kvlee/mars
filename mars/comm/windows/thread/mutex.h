@@ -1,7 +1,7 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
-// Licensed under the MIT License (the "License"); you may not use this file except in 
+// Licensed under the MIT License (the "License"); you may not use this file except in
 // compliance with the License. You may obtain a copy of the License at
 // http://opensource.org/licenses/MIT
 
@@ -10,21 +10,23 @@
 // either express or implied. See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 #ifndef MUTEX_H_
 #define MUTEX_H_
 
 #include <errno.h>
 
-#include "boost/thread/mutex.hpp"
-#include "boost/thread/recursive_mutex.hpp"
+#include <mutex>
+
+//#include "boost/thread/mutex.hpp"
+//#include "boost/thread/recursive_mutex.hpp"
 
 #include "assert/__assert.h"
 
+namespace mars {
+namespace comm {
 class Mutex {
-  public:
-    typedef  boost::mutex handle_type;
+ public:
+    typedef std::mutex handle_type;
     Mutex() {
     }
 
@@ -49,22 +51,27 @@ class Mutex {
     bool islocked() {
         bool ret = trylock();
 
-        if (ret) unlock();
+        if (ret)
+            unlock();
 
         return true != ret;
     }
 
-    handle_type& internal() { return mutex_; }
-  private:
+    handle_type& internal() {
+        return mutex_;
+    }
+
+ private:
     Mutex(const Mutex&);
     Mutex& operator=(const Mutex&);
-  private:
-    boost::mutex mutex_;
+
+ private:
+    std::mutex mutex_;
 };
 
 class RecursiveMutex {
-  public:
-    typedef  boost::recursive_mutex handle_type;
+ public:
+    typedef std::recursive_mutex handle_type;
     RecursiveMutex() {
     }
 
@@ -89,18 +96,25 @@ class RecursiveMutex {
     bool islocked() {
         bool ret = trylock();
 
-        if (ret) unlock();
+        if (ret)
+            unlock();
 
         return true != ret;
     }
 
-    handle_type& internal() { return m_mutex; }
-  private:
+    handle_type& internal() {
+        return m_mutex;
+    }
+
+ private:
     RecursiveMutex(const RecursiveMutex&);
     RecursiveMutex& operator=(const RecursiveMutex&);
-  private:
-    boost::recursive_mutex m_mutex;
+
+ private:
+    std::recursive_mutex m_mutex;
 };
 
+}  // namespace comm
+}  // namespace mars
 
 #endif /* MUTEX_H_ */

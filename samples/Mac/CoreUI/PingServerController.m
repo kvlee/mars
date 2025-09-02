@@ -1,4 +1,4 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
 // Licensed under the MIT License (the "License"); you may not use this file except in 
@@ -50,13 +50,23 @@
     return data;
 }
 
-- (int)notifyUIWithResponse:(NSData*)responseData {
+- (int)onPostDecode:(NSData*)responseData {
     HelloResponse* helloResponse = [HelloResponse parseFromData:responseData];
     if ([helloResponse hasErrmsg]) {
         LOG_INFO(kModuleViewController, @"hello response: %@", helloResponse.errmsg);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSAlert *alert = [[NSAlert alloc] init];
+            [alert setMessageText:helloResponse.errmsg];
+            [alert runModal];
+        });
     }
     
     return helloResponse.retcode == 0 ? 0 : -1;
+}
+
+- (int)onTaskEnd:(uint32_t)tid errType:(uint32_t)errtype errCode:(uint32_t)errcode {
+    
+    return 0;
 }
 
 @end

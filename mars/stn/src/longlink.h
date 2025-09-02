@@ -1,7 +1,7 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
-// Licensed under the MIT License (the "License"); you may not use this file except in 
+// Licensed under the MIT License (the "License"); you may not use this file except in
 // compliance with the License. You may obtain a copy of the License at
 // http://opensource.org/licenses/MIT
 
@@ -9,7 +9,6 @@
 // distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
 // either express or implied. See the License for the specific language governing permissions and
 // limitations under the License.
-
 
 /*
  * longlink.h
@@ -21,67 +20,60 @@
 #ifndef STN_SRC_LONGLINK_H_
 #define STN_SRC_LONGLINK_H_
 
-#include <string>
 #include <list>
+#include <string>
 
-#include "boost/signals2.hpp"
 #include "boost/function.hpp"
-
+#include "boost/signals2.hpp"
+#include "mars/boot/context.h"
+#include "mars/comm/alarm.h"
+#include "mars/comm/messagequeue/message_queue.h"
+#include "mars/comm/move_wrapper.h"
+#include "mars/comm/socket/socketselect.h"
 #include "mars/comm/thread/mutex.h"
 #include "mars/comm/thread/thread.h"
-#include "mars/comm/alarm.h"
-#include "mars/comm/time_utils.h"
-#include "mars/comm/socket/socketselect.h"
 #include "mars/comm/tickcount.h"
-#include "mars/comm/messagequeue/message_queue.h"
-#include "mars/comm/messagequeue/message_queue_utils.h"
-
-#ifdef ANDROID
-#include "mars/comm/android/wakeuplock.h"
-#endif
+#include "mars/stn/proto/longlink_packer.h"
+#include "mars/stn/src/longlink_identify_checker.h"
+#include "mars/stn/src/net_source.h"
 #include "mars/stn/stn.h"
 #include "mars/stn/task_profile.h"
-
-#include "net_source.h"
-#include "longlink_identify_checker.h"
 
 class AutoBuffer;
 class XLogger;
 
 class SmartHeartbeat;
 
-
 namespace mars {
-    namespace stn {
+namespace comm {
+class WakeUpLock;
+class ProxyInfo;
+}  // namespace comm
+namespace stn {
 
-struct LongLinkSendData {
-    LongLinkSendData(): cmdid(0), taskid(mars::stn::Task::kInvalidTaskID)  {}
-    LongLinkSendData(const LongLinkSendData& _rhs) {
-        data.Reset();
-        taskid = mars::stn::Task::kInvalidTaskID;
-        cmdid = 0;
-    }
-    AutoBuffer data;
-    uint32_t cmdid;
-    uint32_t taskid;
-    std::string task_info;
-};
+class NetSource;
+class longlink_tracker;
 
 struct LongLinkNWriteData {
-	LongLinkNWriteData(uint32_t _taskid, ssize_t _writelen, uint32_t _cmdid, std::string _task_info) :
-		taskid(_taskid),
-		writelen(_writelen),
-		cmdid(_cmdid),
-		task_info(_task_info)
-	{}
-	uint32_t taskid;
-	ssize_t writelen;
-	uint32_t cmdid;
-	std::string task_info;
+    LongLinkNWriteData(ssize_t _writelen, const Task& _task) : writelen(_writelen), task(_task) {
+    }
+
+    ssize_t writelen;
+    Task task;
 };
-        
+
+struct StreamResp {
+    StreamResp(const Task& _task = Task(Task::kInvalidTaskID))
+    : task(_task), stream(KNullAtuoBuffer), extension(KNullAtuoBuffer) {
+    }
+
+    Task task;
+    move_wrapper<AutoBuffer> stream;
+    move_wrapper<AutoBuffer> extension;
+};
+
 class LongLink {
-  public:
+ public:
     enum TLongLinkStatus {
         kConnectIdle = 0,
         kConnecting = 1,
@@ -90,6 +82,7 @@ class LongLink {
         kConnectFailed,
     };
 
+    /*
     // Note: Never Delete Item!!!Just Add!!!
     enum TDisconnectInternalCode {
         kNone = 0,
@@ -113,83 +106,144 @@ class LongLink {
         kForceNewGetDns = 10017,
         kLinkCheckError = 10018,
         kTimeCheckSucc = 10019,
+        kObjectDestruct = 10020,
+        kLinkDetectEnd = 10021,
     };
+      */
+ public:
+    boost::signals2::signal<void(TLongLinkStatus _connectStatus, const std::string& _channel_id)> SignalConnection;
+    boost::signals2::signal<void(const ConnectProfile& _connprofile)> broadcast_linkstatus_signal_;
 
-  public:
-    boost::signals2::signal<void (TLongLinkStatus _connectStatus)> SignalConnection;
-    boost::function<void (int _line, ErrCmdType _errtype, int _errcode, const std::string& _ip, uint16_t _port)> fun_network_report_;
-    
-    boost::function< void (uint32_t _taskid)> OnSend;
-    boost::function< void (uint32_t _taskid, size_t _cachedsize, size_t _totalsize)> OnRecv;
-    boost::function< void (ErrCmdType _error_type, int _error_code, uint32_t _cmdid, uint32_t _taskid, AutoBuffer& _body, const ConnectProfile& _info)> OnResponse;
+    boost::function<void(uint32_t _tls_version, mars::stn::TlsHandshakeFrom _from)> OnHandshakeCompleted;
+    boost::function<void(uint32_t _taskid)> OnSend;
+    boost::function<void(uint32_t _taskid, size_t _cachedsize, size_t _package_size)> OnRecv;
+    boost::function<void(const std::string& _name,
+                         ErrCmdType _error_type,
+                         int _error_code,
+                         uint32_t _cmdid,
+                         uint32_t _taskid,
+                         AutoBuffer& _body,
+                         AutoBuffer& _extension,
+                         const ConnectProfile& _info)>
+        OnResponse;
+    boost::function<void(int _line, ErrCmdType _errtype, int _errcode, const std::string& _ip, uint16_t _port)>
+        fun_network_report_;
+    boost::function<void(uint64_t _interval)> OnNoopAlarmSet;
+    boost::function<void(bool _noop_timeout)> OnNoopAlarmReceived;
 
-    boost::signals2::signal<void (const ConnectProfile& _connprofile)> broadcast_linkstatus_signal_;
-
-  public:
-    LongLink(NetSource& _netsource, MessageQueue::MessageQueue_t _messagequeueid);
+ public:
+    LongLink(boot::Context* _context,
+             const comm::mq::MessageQueue_t& _messagequeueid,
+             std::shared_ptr<NetSource> _netsource,
+             const LonglinkConfig& _config,
+             LongLinkEncoder& _encoder = gDefaultLongLinkEncoder);
     virtual ~LongLink();
 
-    bool    Send(const unsigned char* _pbuf, size_t _len, uint32_t _cmdid, uint32_t _taskid, const std::string& _task_info = "");
-    bool    SendWhenNoData(const unsigned char* _pbuf, size_t _len, uint32_t _cmdid, uint32_t _taskid);
-    bool    Stop(uint32_t _taskid);
+    bool Send(const AutoBuffer& _body, const AutoBuffer& _extension, const Task& _task);
+    bool SendWhenNoData(const AutoBuffer& _body, const AutoBuffer& _extension, uint32_t _cmdid, uint32_t _taskid);
+    bool Stop(uint32_t _taskid);
 
-    bool            MakeSureConnected(bool* _newone = NULL);
-    void            Disconnect(TDisconnectInternalCode _scene);
+    bool MakeSureConnected(bool* _newone = NULL);
+    void Disconnect(LongLinkErrCode::TDisconnectInternalCode _scene);
     TLongLinkStatus ConnectStatus() const;
 
-    ConnectProfile  Profile() const   { return conn_profile_; }
-    tickcount_t&    GetLastRecvTime() { return lastrecvtime_; }
-    
-  private:
+    ConnectProfile Profile() const {
+        return conn_profile_;
+    }
+    tickcount_t& GetLastRecvTime() {
+        return lastrecvtime_;
+    }
+
+    std::string GetDisconnectReasonText() {
+        return longlink_disconnect_reason_text_;
+    }
+    void TrigNoop();
+
+    LongLinkEncoder& Encoder() const {
+        return encoder_;
+    }
+    void SetDnsFunc(
+        const std::function<std::vector<std::string>(const std::string& _host, bool _longlink_host, const std::map<std::string, std::string>& _extra_info)>& _dns_func) {
+        dns_util_.GetNewDNS().SetDnsFunc(_dns_func);
+    }
+    std::string ChannelId() {
+        return config_.name;
+    }
+    void SvrTrigOff() {
+        svr_trig_off_ = false;
+    }
+    bool IsSvrTrigOff() {
+        return false;  // 暂时不用这个功能
+                       //        return config_.link_type == Task::kChannelMinorLong && svr_trig_off_;
+    }
+
+    virtual void OnConnectHandshakeCompleted() {
+    }
+
+ private:
     LongLink(const LongLink&);
     LongLink& operator=(const LongLink&);
 
-  protected:
-    bool    __Send(const unsigned char* _pbuf, size_t _len, uint32_t _cmdid, uint32_t _taskid, const std::string& _task_message);
-    void    __ConnectStatus(TLongLinkStatus _status);
-    void    __UpdateProfile(const ConnectProfile& _conn_profile);
-    void    __RunResponseError(ErrCmdType _type, int _errcode, ConnectProfile& _profile, bool _networkreport = true);
+ protected:
+    void __ConnectStatus(TLongLinkStatus _status);
+    void __UpdateProfile(const ConnectProfile _conn_profile);
+    void __RunResponseError(ErrCmdType _type, int _errcode, ConnectProfile& _profile, bool _networkreport = true);
 
-    bool    __NoopReq(XLogger& _xlog, Alarm& _alarm, bool need_active_timeout);
-    bool    __NoopResp(uint32_t _cmdid, uint32_t _taskid, AutoBuffer& _buf, Alarm& _alarm, ConnectProfile& _profile);
+    bool __SendNoopWhenNoData();
+    bool __NoopReq(XLogger& _xlog, comm::Alarm& _alarm, bool need_active_timeout);
+    bool __NoopResp(uint32_t _cmdid,
+                    uint32_t _taskid,
+                    AutoBuffer& _buf,
+                    AutoBuffer& _extension,
+                    comm::Alarm& _alarm,
+                    bool& _nooping,
+                    ConnectProfile& _profile);
 
-    virtual void     __OnAlarm();
-    virtual void     __Run();
-    virtual SOCKET   __RunConnect(ConnectProfile& _conn_profile);
-    virtual void     __RunReadWrite(SOCKET _sock, ErrCmdType& _errtype, int& _errcode, ConnectProfile& _profile);
-    
-  protected:
-    
-    uint32_t   __GetNextHeartbeatInterval();
-    void       __NotifySmartHeartbeatConnectStatus(TLongLinkStatus _status);
-    void       __NotifySmartHeartbeatHeartReq(ConnectProfile& _profile, uint64_t _internal, uint64_t _actual_internal);
-    void       __NotifySmartHeartbeatHeartResult(bool _succes, bool _fail_of_timeout, ConnectProfile& _profile);
-    void       __NotifySmartHeartbeatJudgeMIUIStyle();
+    virtual void __OnAlarm(bool _noop_timeout);
+    virtual void __Run();
+    virtual SOCKET __RunConnect(ConnectProfile& _conn_profile);
+    virtual void __RunReadWrite(SOCKET _sock, ErrCmdType& _errtype, int& _errcode, ConnectProfile& _profile);
 
-  protected:
-    MessageQueue::ScopeRegister     asyncreg_;
-    NetSource&                      netsource_;
-    
-    Mutex                           mutex_;
-    Thread                          thread_;
-    SmartHeartbeat*                 smartheartbeat_;
+ protected:
+    uint32_t __GetNextHeartbeatInterval();
+    void __NotifySmartHeartbeatConnectStatus(TLongLinkStatus _status);
+    void __NotifySmartHeartbeatHeartReq(ConnectProfile& _profile, uint64_t _internal, uint64_t _actual_internal);
+    void __NotifySmartHeartbeatHeartResult(bool _succes, bool _fail_of_timeout, ConnectProfile& _profile);
+    void __NotifySmartHeartbeatJudgeDozeStyle();
 
-    NetSource::DnsUtil              dns_util_;
-    SocketSelectBreaker             connectbreak_;
-    TLongLinkStatus                 connectstatus_;
-    ConnectProfile                  conn_profile_;
-    TDisconnectInternalCode         disconnectinternalcode_;
-    
-    SocketSelectBreaker             readwritebreak_;
-    LongLinkIdentifyChecker         identifychecker_;
-    std::list<LongLinkSendData>     lstsenddata_;
-    tickcount_t                     lastrecvtime_;
-    
-#ifdef ANDROID
-    WakeUpLock                      wakelock_;
-#endif
+ protected:
+    boot::Context* context_;
+    comm::MessageQueue::ScopeRegister asyncreg_;
+    std::shared_ptr<NetSource> netsource_;
+    LonglinkConfig config_;
+
+    comm::Mutex mutex_;
+    comm::Thread thread_;
+
+    boost::scoped_ptr<longlink_tracker> tracker_;
+    NetSource::DnsUtil dns_util_;
+    comm::SocketBreaker connectbreak_;
+    TLongLinkStatus connectstatus_;
+    ConnectProfile conn_profile_;
+    LongLinkErrCode::TDisconnectInternalCode disconnectinternalcode_;
+
+    comm::SocketBreaker readwritebreak_;
+    LongLinkIdentifyChecker identifychecker_;
+    std::list<std::pair<Task, move_wrapper<AutoBuffer>>> lstsenddata_;
+    tickcount_t lastrecvtime_;
+    comm::Alarm alarmnooptimeout_;
+    bool isnooping_ = false;
+
+    SmartHeartbeat* smartheartbeat_ = nullptr;
+    comm::WakeUpLock* wakelock_ = nullptr;
+
+    LongLinkEncoder& encoder_;
+    unsigned long long lastheartbeat_;
+    std::string longlink_disconnect_reason_text_;
+    bool svr_trig_off_ = false;  // with minor longlink, if server close the socket, do not auto rebuild until task
 };
-        
-}}
 
-#endif // STN_SRC_LONGLINK_H_
+}  // namespace stn
+}  // namespace mars
+
+#endif  // STN_SRC_LONGLINK_H_

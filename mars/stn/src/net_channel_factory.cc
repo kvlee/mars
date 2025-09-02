@@ -1,7 +1,7 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
-// Licensed under the MIT License (the "License"); you may not use this file except in 
+// Licensed under the MIT License (the "License"); you may not use this file except in
 // compliance with the License. You may obtain a copy of the License at
 // http://opensource.org/licenses/MIT
 
@@ -19,43 +19,59 @@
 
 #include "net_channel_factory.h"
 
-#include "mars/comm/compiler_util.h"
+#include "longlink.h"
 #include "mars/comm/messagequeue/message_queue.h"
 #include "mars/comm/xlogger/xlogger.h"
-
-#include "longlink.h"
 #include "shortlink.h"
 
+using namespace mars::comm;
 namespace mars {
 namespace stn {
 
 namespace ShortLinkChannelFactory {
 
-WEAK_FUNC ShortLinkInterface* Create(MessageQueue::MessageQueue_t _messagequeueid, NetSource& _netsource, const std::vector<std::string>& _host_list,
-					const std::string& _url, const int _taskid, bool _use_proxy) {
-	xdebug2(TSF"use weak func Create");
-	return new ShortLink(_messagequeueid, _netsource, _host_list, _url, _taskid, _use_proxy);
-}
+ShortLinkInterface* (*Create)(boot::Context* _context,
+                              const mq::MessageQueue_t& _messagequeueid,
+                              std::shared_ptr<NetSource> _netsource,
+                              const Task& _task,
+                              const ShortlinkConfig& _config) =
+    [](boot::Context* _context,
+       const mq::MessageQueue_t& _messagequeueid,
+       std::shared_ptr<NetSource> _netsource,
+       const Task& _task,
+       const ShortlinkConfig& _config) -> ShortLinkInterface* {
+    xdebug2(TSF "use weak func Create");
+    return new ShortLink(_context, _messagequeueid, _netsource, _task, _config.use_proxy);
+};
 
-WEAK_FUNC void Destory(ShortLinkInterface* _short_link_channel) {
-	delete _short_link_channel;
-	_short_link_channel = NULL;
-}
+void (*Destory)(ShortLinkInterface* _short_link_channel) = [](ShortLinkInterface* _short_link_channel) {
+    delete _short_link_channel;
+    _short_link_channel = NULL;
+};
 
-}
+}  // namespace ShortLinkChannelFactory
 
 namespace LongLinkChannelFactory {
 
-WEAK_FUNC LongLink* Create(NetSource& _netsource, MessageQueue::MessageQueue_t _messagequeueid) {
-	return new LongLink(_netsource, _messagequeueid);
-}
+LongLink* (*Create)(boot::Context* _context,
+                    const mq::MessageQueue_t& _messagequeueid,
+                    std::shared_ptr<NetSource> _netsource,
+                    const LonglinkConfig& _config) = [](boot::Context* _context,
+                                                        const mq::MessageQueue_t& _messagequeueid,
+                                                        std::shared_ptr<NetSource> _netsource,
+                                                        const LonglinkConfig& _config) {
+    LongLink* longlink = new LongLink(_context, _messagequeueid, _netsource, _config, gDefaultLongLinkEncoder);
+    if (_config.dns_func != nullptr) {
+        longlink->SetDnsFunc(_config.dns_func);
+    }
+    return longlink;
+};
 
-WEAK_FUNC void Destory(LongLink* _long_link_channel) {
-	delete _long_link_channel;
-	_long_link_channel = NULL;
-}
+void (*Destory)(LongLink* _long_link_channel) = [](LongLink* _long_link_channel) {
+    delete _long_link_channel;
+    _long_link_channel = NULL;
+};
 
-}
-
-}
-}
+}  // namespace LongLinkChannelFactory
+}  // namespace stn
+}  // namespace mars

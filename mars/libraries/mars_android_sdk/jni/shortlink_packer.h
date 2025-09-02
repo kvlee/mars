@@ -1,7 +1,7 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
-// Licensed under the MIT License (the "License"); you may not use this file except in 
+// Licensed under the MIT License (the "License"); you may not use this file except in
 // compliance with the License. You may obtain a copy of the License at
 // http://opensource.org/licenses/MIT
 
@@ -20,15 +20,30 @@
 #ifndef SRC_SHORTLINK_PACKER_H_
 #define SRC_SHORTLINK_PACKER_H_
 
-#ifdef __APPLE__
-#include "mars/comm/http.h"
-#else
-#include "comm/http.h"
-#endif
-
+#include <map>
+#include <string>
 
 class AutoBuffer;
 
-void shortlink_pack(const std::string& _url, const std::map<std::string, std::string>& _headers, const AutoBuffer& _body, AutoBuffer& _out_buff);
+namespace mars {
+namespace stn {
+
+class shortlink_tracker {
+ public:
+    static shortlink_tracker* (*Create)();
+
+ public:
+    virtual ~shortlink_tracker(){};
+};
+
+extern void (*shortlink_pack)(const std::string& _url,
+                              const std::map<std::string, std::string>& _headers,
+                              const AutoBuffer& _body,
+                              const AutoBuffer& _extension,
+                              AutoBuffer& _out_buff,
+                              shortlink_tracker* _tracker);
+
+}  // namespace stn
+}  // namespace mars
 
 #endif /* SRC_SHORTLINK_PACKER_H_ */

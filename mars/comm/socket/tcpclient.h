@@ -1,7 +1,7 @@
-// Tencent is pleased to support the open source community by making GAutomator available.
+// Tencent is pleased to support the open source community by making Mars available.
 // Copyright (C) 2016 THL A29 Limited, a Tencent company. All rights reserved.
 
-// Licensed under the MIT License (the "License"); you may not use this file except in 
+// Licensed under the MIT License (the "License"); you may not use this file except in
 // compliance with the License. You may obtain a copy of the License at
 // http://opensource.org/licenses/MIT
 
@@ -10,7 +10,6 @@
 // either express or implied. See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 /*
  * TcpClient.c
  *
@@ -18,22 +17,25 @@
  *      Author: yerungui && jiahong
  */
 
-
-
 #ifndef __TcpClient__
 #define __TcpClient__
 
-#include "comm/socket/socketselect.h"
 #include <list>
-#include "comm/thread/thread.h"
-#include "comm/thread/lock.h"
+
+#include "comm/socket/socketselect.h"
 #include "comm/socket/unix_socket.h"
+#include "comm/thread/lock.h"
+#include "comm/thread/thread.h"
 
 class AutoBuffer;
 
+namespace mars {
+namespace comm {
+
 class MTcpEvent {
-  public:
-    virtual ~MTcpEvent() {}
+ public:
+    virtual ~MTcpEvent() {
+    }
 
     virtual void OnConnect() = 0;
     virtual void OnDisConnect(bool _isremote) = 0;
@@ -46,7 +48,7 @@ class MTcpEvent {
 };
 
 class TcpClient {
-  public:
+ public:
     enum TTcpStatus {
         kTcpInit = 0,
         kTcpInitErr,
@@ -62,11 +64,11 @@ class TcpClient {
         kTcpDisConnected,
     };
 
-  public:
+ public:
     TcpClient(const char* _ip, uint16_t _port, MTcpEvent& _event, int _timeout = 6 * 1000);
     ~TcpClient();
 
-  public:
+ public:
     bool Connect();
     void Disconnect();
     void DisconnectAndWait();
@@ -78,23 +80,29 @@ class TcpClient {
     int Write(const void* _buf, unsigned int _len);
     int WritePostData(void* _buf, unsigned int _len);
 
-    const char* GetIP() const {return ip_;}
-    uint16_t GetPort() const {return port_;}
+    const char* GetIP() const {
+        return ip_;
+    }
+    uint16_t GetPort() const {
+        return port_;
+    }
 
-    TTcpStatus GetTcpStatus() const {return status_;}
+    TTcpStatus GetTcpStatus() const {
+        return status_;
+    }
 
-  private:
+ private:
     void __Run();
     void __RunThread();
     void __SendBreak();
 
-  private:
+ private:
     char* ip_;
     uint16_t port_;
     MTcpEvent& event_;
 
     SOCKET socket_;
-    bool have_read_date_;
+    bool have_read_data_;
     bool will_disconnect_;
     int writedbufid_;
     std::list<AutoBuffer*> lst_buffer_;
@@ -104,10 +112,12 @@ class TcpClient {
     mutable Mutex read_disconnect_mutex_;
     Mutex connect_mutex_;
 
-    SocketSelectBreaker pipe_;
+    SocketBreaker pipe_;
 
     int timeout_;
     volatile TTcpStatus status_;
 };
+}  // namespace comm
+}  // namespace mars
 
 #endif
